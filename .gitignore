@@ -1,0 +1,56 @@
+# Ignore everything except articles and assets
+*
+
+# Allow directories
+!*/
+
+# Allow Markdown files (articles)
+!*.md
+
+# Allow image files (covers and diagrams)
+!*.png
+!*.jpg
+!*.jpeg
+!*.gif
+!*.svg
+
+# Allow license and config
+!LICENSE
+!.gitignore
+
+# Explicitly ignore non-article files
+*.py
+*.js
+*.ts
+*.json
+*.yaml
+*.yml
+*.sh
+*.bat
+*.exe
+*.zip
+*.tar
+*.gz
+
+# Ignore development files
+.claude/
+.vscode/
+.idea/
+node_modules/
+__pycache__/
+*.pyc
+.env
+.env.*
+
+# Ignore logs and temp files
+*.log
+*.tmp
+*.bak
+*~
+.DS_Store
+Thumbs.db
+
+# Ignore scripts and archived content
+scripts/
+archived_*/
+drafts/
