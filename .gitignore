@@ -1,3 +1,9 @@
+# ============================================
+# pubilie_doc GitHub公开仓库 .gitignore
+# 更新时间: 2026-01-01
+# 原则: 只上传公开技术文章和配图
+# ============================================
+
 # Ignore everything except articles and assets
 *
 
@@ -18,7 +24,47 @@
 !LICENSE
 !.gitignore
 
-# Explicitly ignore non-article files
+# ============================================
+# 敏感/非公开文件（强制排除）
+# ============================================
+
+# 项目配置文件（禁止上传）
+CLAUDE.md
+TODOLIST.md
+TODOLIST_*.md
+*.local.json
+settings.local.json
+
+# 平台特定版本（本地保留，不上传）
+*_LinkedIn.md
+*_Twitter_Thread.md
+*_Zsxq.md
+*_Medium.md
+*_Newsletter*.md
+*_DevTo.md
+
+# 内部文档
+INFLUENCE_*.md
+MULTI_PLATFORM_*.md
+PROJECT_OPTIMIZATION_*.md
+SKILLS_AGENTS_*.md
+*_ARCHIVE*.md
+
+# ============================================
+# 开发和系统文件
+# ============================================
+
+# Development files
+.claude/
+.vscode/
+.idea/
+node_modules/
+__pycache__/
+*.pyc
+.env
+.env.*
+
+# Script files
 *.py
 *.js
 *.ts
@@ -32,17 +78,7 @@
 *.tar
 *.gz
 
-# Ignore development files
-.claude/
-.vscode/
-.idea/
-node_modules/
-__pycache__/
-*.pyc
-.env
-.env.*
-
-# Ignore logs and temp files
+# Logs and temp files
 *.log
 *.tmp
 *.bak
@@ -50,7 +86,8 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-# Ignore scripts and archived content
+# Directories
 scripts/
 archived_*/
 drafts/
+backups/
