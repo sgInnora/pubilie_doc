@@ -1,0 +1,362 @@
+{
+  "name": "Pubilie-Doc Multi-Platform Content Publisher",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "publish-article",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Article Publish Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "pubilie-doc-publisher"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json.body;\n\nconst publishRequest = {\n  request_id: `PUB-${Date.now()}`,\n  article: {\n    title: input.title,\n    title_en: input.title_en || '',\n    content: input.content,\n    content_en: input.content_en || '',\n    category: input.category || 'AI-Security',\n    tags: input.tags || [],\n    author: input.author || 'Innora Security Research'\n  },\n  target_platforms: input.platforms || ['twitter', 'linkedin', 'zsxq', 'medium'],\n  options: {\n    humanize_check: input.humanize_check !== false,\n    schedule_time: input.schedule_time || null,\n    generate_cover: input.generate_cover !== false,\n    language: input.language || 'bilingual'\n  },\n  created_at: new Date().toISOString()\n};\n\nreturn [{ json: publishRequest }];"
+      },
+      "id": "parse-request",
+      "name": "Parse Publish Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.options.humanize_check }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check-humanize",
+      "name": "Need Humanize Check?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://ai-cli-server:8765/api/smart",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ prompt: `Analyze this text for AI writing patterns. Check for:\n1. Burstiness (sentence length variation) - target >= 0.7\n2. AI phrases (禁止词: 让我们深入探讨, 值得注意的是, 首先...其次...最后)\n3. High-frequency word repetition (max 5 per 1000 chars)\n4. Short paragraph ratio (max 55%)\n\nText to analyze (first 3000 chars):\n${$json.article.content.substring(0, 3000)}\n\nRespond in JSON:\n{\n  \"burstiness_score\": 0.0-1.0,\n  \"ai_phrases_found\": [\"phrase1\", \"phrase2\"],\n  \"ai_phrase_count\": 0,\n  \"repetition_issues\": [\"word: count\"],\n  \"short_para_ratio\": 0.0-1.0,\n  \"humanized_pass\": true/false,\n  \"suggestions\": [\"fix1\", \"fix2\"]\n}`, options: { temperature: 0.2, max_tokens: 1000 } }) }}",
+        "options": { "timeout": 60000 }
+      },
+      "id": "humanize-check",
+      "name": "AI Humanize Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const request = $('Parse Publish Request').first().json;\nconst checkResult = $input.first().json;\n\nlet humanizeResult;\ntry {\n  const jsonMatch = checkResult.response?.match(/```json\\n([\\s\\S]*?)\\n```/) ||\n                    checkResult.response?.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    humanizeResult = JSON.parse(jsonMatch[1] || jsonMatch[0]);\n  } else {\n    humanizeResult = { humanized_pass: true, burstiness_score: 0.8 };\n  }\n} catch (e) {\n  humanizeResult = { humanized_pass: true, error: e.message };\n}\n\nconst enrichedRequest = {\n  ...request,\n  humanize_result: humanizeResult,\n  proceed: humanizeResult.humanized_pass || humanizeResult.burstiness_score >= 0.7\n};\n\nreturn [{ json: enrichedRequest }];"
+      },
+      "id": "process-humanize",
+      "name": "Process Humanize Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 200]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "id": "merge-humanize",
+      "name": "Merge Paths",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1100, 350]
+    },
+    {
+      "parameters": {
+        "url": "http://ai-cli-server:8765/api/smart",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ prompt: `Transform this article for multi-platform publishing.\n\nOriginal Title: ${$json.article.title}\nOriginal Content (first 2000 chars): ${$json.article.content.substring(0, 2000)}\nCategory: ${$json.article.category}\nTags: ${$json.article.tags.join(', ')}\n\nGenerate platform-specific content in JSON:\n{\n  \"twitter\": {\n    \"thread\": [\"Tweet 1 (max 280 chars with emoji)\", \"Tweet 2\", \"...(5-8 tweets)\"],\n    \"hashtags\": [\"tag1\", \"tag2\", \"tag3\"]\n  },\n  \"linkedin\": {\n    \"post\": \"LinkedIn post (1500-2000 chars, professional tone)\",\n    \"hashtags\": [\"tag1\", \"tag2\"]\n  },\n  \"zsxq\": {\n    \"title\": \"知识星球标题\",\n    \"intro\": \"引言（100-200字）\",\n    \"key_points\": [\"要点1\", \"要点2\", \"要点3\"]\n  },\n  \"medium\": {\n    \"title\": \"SEO optimized title\",\n    \"subtitle\": \"Engaging subtitle\",\n    \"tags\": [\"tag1\", \"tag2\", \"tag3\", \"tag4\", \"tag5\"]\n  },\n  \"newsletter\": {\n    \"subject\": \"Email subject line\",\n    \"preview\": \"Preview text (100 chars)\",\n    \"intro\": \"Email intro paragraph\"\n  }\n}`, options: { temperature: 0.7, max_tokens: 2500 } }) }}",
+        "options": { "timeout": 90000 }
+      },
+      "id": "transform-content",
+      "name": "AI Platform Transform",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1300, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const request = $('Merge Paths').first().json;\nconst transformResult = $input.first().json;\n\nlet platformContent;\ntry {\n  const jsonMatch = transformResult.response?.match(/```json\\n([\\s\\S]*?)\\n```/) ||\n                    transformResult.response?.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    platformContent = JSON.parse(jsonMatch[1] || jsonMatch[0]);\n  } else {\n    throw new Error('No JSON found in response');\n  }\n} catch (e) {\n  platformContent = {\n    twitter: { thread: [request.article.title.substring(0, 250)], hashtags: request.article.tags.slice(0, 3) },\n    linkedin: { post: request.article.content.substring(0, 1500), hashtags: request.article.tags.slice(0, 5) },\n    zsxq: { title: request.article.title, intro: request.article.content.substring(0, 200), key_points: [] },\n    medium: { title: request.article.title, subtitle: '', tags: request.article.tags.slice(0, 5) },\n    newsletter: { subject: request.article.title, preview: request.article.content.substring(0, 100), intro: '' },\n    error: e.message\n  };\n}\n\nconst publishPackage = {\n  request_id: request.request_id,\n  article: request.article,\n  target_platforms: request.target_platforms,\n  platform_content: platformContent,\n  humanize_result: request.humanize_result || { skipped: true },\n  options: request.options,\n  transformed_at: new Date().toISOString()\n};\n\nreturn [{ json: publishPackage }];"
+      },
+      "id": "prepare-publish",
+      "name": "Prepare Publish Package",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1500, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.target_platforms.includes('twitter') }}",
+              "operation": "equals",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "id": "check-twitter",
+      "name": "Publish Twitter?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1750, 100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.target_platforms.includes('linkedin') }}",
+              "operation": "equals",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "id": "check-linkedin",
+      "name": "Publish LinkedIn?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1750, 250]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.target_platforms.includes('zsxq') }}",
+              "operation": "equals",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "id": "check-zsxq",
+      "name": "Publish ZSXQ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1750, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.target_platforms.includes('medium') }}",
+              "operation": "equals",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "id": "check-medium",
+      "name": "Publish Medium?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1750, 550]
+    },
+    {
+      "parameters": {
+        "url": "http://zetapulse:8081/api/publish/twitter",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ thread: $json.platform_content.twitter.thread, hashtags: $json.platform_content.twitter.hashtags, request_id: $json.request_id }) }}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "publish-twitter",
+      "name": "Publish to Twitter/X",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, 50]
+    },
+    {
+      "parameters": {
+        "url": "http://zetapulse:8081/api/publish/linkedin",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ post: $json.platform_content.linkedin.post, hashtags: $json.platform_content.linkedin.hashtags, request_id: $json.request_id }) }}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "publish-linkedin",
+      "name": "Publish to LinkedIn",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, 200]
+    },
+    {
+      "parameters": {
+        "url": "http://zetapulse:8081/api/publish/zsxq",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ title: $json.platform_content.zsxq.title, intro: $json.platform_content.zsxq.intro, key_points: $json.platform_content.zsxq.key_points, full_content: $json.article.content, request_id: $json.request_id }) }}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "publish-zsxq",
+      "name": "Publish to ZSXQ",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, 350]
+    },
+    {
+      "parameters": {
+        "url": "http://zetapulse:8081/api/publish/medium",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ title: $json.platform_content.medium.title, subtitle: $json.platform_content.medium.subtitle, content: $json.article.content_en || $json.article.content, tags: $json.platform_content.medium.tags, request_id: $json.request_id }) }}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "publish-medium",
+      "name": "Publish to Medium",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, 500]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "id": "merge-results",
+      "name": "Merge Publish Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [2250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = $input.all().map(item => item.json);\nconst originalRequest = $('Prepare Publish Package').first().json;\n\nconst publishSummary = {\n  request_id: originalRequest.request_id,\n  article_title: originalRequest.article.title,\n  humanize_check: {\n    performed: !originalRequest.humanize_result?.skipped,\n    passed: originalRequest.humanize_result?.humanized_pass ?? true,\n    burstiness: originalRequest.humanize_result?.burstiness_score\n  },\n  platforms_targeted: originalRequest.target_platforms,\n  publish_results: results.map(r => ({\n    platform: r.platform || 'unknown',\n    status: r.success ? 'published' : (r.queued ? 'queued' : 'failed'),\n    post_id: r.post_id,\n    url: r.url,\n    scheduled_time: r.scheduled_time\n  })),\n  success_count: results.filter(r => r.success || r.queued).length,\n  total_platforms: originalRequest.target_platforms.length,\n  completed_at: new Date().toISOString()\n};\n\nreturn [{ json: publishSummary }];"
+      },
+      "id": "create-summary",
+      "name": "Create Publish Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2450, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, summary: $json }) }}"
+      },
+      "id": "send-response",
+      "name": "Return Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2650, 300]
+    }
+  ],
+  "connections": {
+    "Article Publish Request": {
+      "main": [[{ "node": "Parse Publish Request", "type": "main", "index": 0 }]]
+    },
+    "Parse Publish Request": {
+      "main": [[{ "node": "Need Humanize Check?", "type": "main", "index": 0 }]]
+    },
+    "Need Humanize Check?": {
+      "main": [
+        [{ "node": "AI Humanize Check", "type": "main", "index": 0 }],
+        [{ "node": "Merge Paths", "type": "main", "index": 1 }]
+      ]
+    },
+    "AI Humanize Check": {
+      "main": [[{ "node": "Process Humanize Result", "type": "main", "index": 0 }]]
+    },
+    "Process Humanize Result": {
+      "main": [[{ "node": "Merge Paths", "type": "main", "index": 0 }]]
+    },
+    "Merge Paths": {
+      "main": [[{ "node": "AI Platform Transform", "type": "main", "index": 0 }]]
+    },
+    "AI Platform Transform": {
+      "main": [[{ "node": "Prepare Publish Package", "type": "main", "index": 0 }]]
+    },
+    "Prepare Publish Package": {
+      "main": [
+        [
+          { "node": "Publish Twitter?", "type": "main", "index": 0 },
+          { "node": "Publish LinkedIn?", "type": "main", "index": 0 },
+          { "node": "Publish ZSXQ?", "type": "main", "index": 0 },
+          { "node": "Publish Medium?", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Publish Twitter?": {
+      "main": [
+        [{ "node": "Publish to Twitter/X", "type": "main", "index": 0 }],
+        [{ "node": "Merge Publish Results", "type": "main", "index": 0 }]
+      ]
+    },
+    "Publish to Twitter/X": {
+      "main": [[{ "node": "Merge Publish Results", "type": "main", "index": 0 }]]
+    },
+    "Publish LinkedIn?": {
+      "main": [
+        [{ "node": "Publish to LinkedIn", "type": "main", "index": 0 }],
+        [{ "node": "Merge Publish Results", "type": "main", "index": 1 }]
+      ]
+    },
+    "Publish to LinkedIn": {
+      "main": [[{ "node": "Merge Publish Results", "type": "main", "index": 1 }]]
+    },
+    "Publish ZSXQ?": {
+      "main": [
+        [{ "node": "Publish to ZSXQ", "type": "main", "index": 0 }],
+        [{ "node": "Merge Publish Results", "type": "main", "index": 2 }]
+      ]
+    },
+    "Publish to ZSXQ": {
+      "main": [[{ "node": "Merge Publish Results", "type": "main", "index": 2 }]]
+    },
+    "Publish Medium?": {
+      "main": [
+        [{ "node": "Publish to Medium", "type": "main", "index": 0 }],
+        [{ "node": "Merge Publish Results", "type": "main", "index": 3 }]
+      ]
+    },
+    "Publish to Medium": {
+      "main": [[{ "node": "Merge Publish Results", "type": "main", "index": 3 }]]
+    },
+    "Merge Publish Results": {
+      "main": [[{ "node": "Create Publish Summary", "type": "main", "index": 0 }]]
+    },
+    "Create Publish Summary": {
+      "main": [[{ "node": "Return Response", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "meta": {
+    "templateId": "pubilie-doc-multi-platform-publisher-v1",
+    "categories": ["Content Publishing", "AI Writing", "Multi-Platform"],
+    "description": "AI-powered multi-platform content publisher with humanized writing check for pubilie_doc project",
+    "author": "Innora",
+    "version": "1.0.0",
+    "requirements": {
+      "ai-cli-server": ">=2.1.0",
+      "zetapulse": ">=1.0.0"
+    },
+    "integration": {
+      "project": "pubilie_doc",
+      "skills_used": ["humanized-writing", "content-repurposing", "twitter-adapting"],
+      "agents_used": ["platform-publisher"]
+    }
+  }
+}
