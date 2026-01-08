@@ -526,11 +526,189 @@ Skill Actions:
 - Script output format compatible with ZetaVideo API (future integration)
 - Works with `cover-generator` for thumbnail prompts
 
-## Future: ZetaVideo Integration
+## ZetaVideo Integration (v0.1.0+)
 
-> **Note**: ZetaVideo is currently under development. When ready, this skill will integrate with:
-> - `POST /api/video/generate` - Submit script for video generation
-> - `GET /api/video/status/{id}` - Check generation progress
-> - `POST /api/video/publish` - Publish to platform
+> **Status**: ZetaVideo正在Phase 1 MVP开发中，本技能已预留完整API集成接口
+> **项目路径**: `/Users/anwu/Documents/code/zetavideo/`
+> **技术栈**: Python 3.10+ / FastAPI / FFmpeg / Qwen+GPT
 
-Current status: **Script generation only** (no API calls)
+### 架构映射
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│               video-script-generator Skill                       │
+│  (pubilie_doc)                                                   │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼ 脚本提交
+┌─────────────────────────────────────────────────────────────────┐
+│                       ZetaVideo API Gateway                      │
+│  Endpoint: http://localhost:8000/api/v1/                         │
+│  Auth: Bearer Token (ZETAVIDEO_API_KEY)                          │
+└─────────────────────────────────────────────────────────────────┘
+         │                    │                    │
+         ▼                    ▼                    ▼
+┌───────────────┐    ┌───────────────┐    ┌───────────────┐
+│Content Service│    │ Video Factory │    │Publish Engine │
+│  /content/*   │    │   /video/*    │    │  /publish/*   │
+└───────────────┘    └───────────────┘    └───────────────┘
+```
+
+### API Endpoints (占位符)
+
+```yaml
+# 1. 脚本提交与视频生成
+POST /api/v1/video/generate:
+  request:
+    script_content: string      # Markdown脚本内容
+    platform: enum              # bilibili|douyin|youtube
+    voice_style: string         # 语音风格 (default: "zh-CN-XiaoxiaoNeural")
+    video_style: string         # 视频风格模板
+    background_music: string    # BGM选择
+    quality: enum               # draft|standard|high
+  response:
+    job_id: string
+    estimated_duration: int     # 预估生成时间(秒)
+    queue_position: int
+
+# 2. 生成状态查询
+GET /api/v1/video/status/{job_id}:
+  response:
+    status: enum                # queued|processing|rendering|completed|failed
+    progress: float             # 0.0-1.0
+    current_step: string        # 当前步骤描述
+    output_url: string?         # 完成后的视频URL
+    error_message: string?
+
+# 3. 直接发布到平台
+POST /api/v1/publish/submit:
+  request:
+    video_url: string           # 视频URL或job_id
+    platform: enum              # douyin|kuaishou|bilibili|youtube
+    title: string
+    description: string
+    tags: string[]
+    schedule_time: datetime?    # 定时发布
+    cover_url: string?          # 自定义封面
+  response:
+    publish_id: string
+    platform_status: string
+
+# 4. 批量处理（多平台）
+POST /api/v1/video/batch:
+  request:
+    script_content: string
+    platforms: enum[]           # 多平台同时生成
+  response:
+    batch_id: string
+    jobs: JobInfo[]
+```
+
+### 集成示例代码（待激活）
+
+```python
+# 文件: tools/zetavideo_client.py (占位符)
+
+import os
+import httpx
+from typing import Optional, List
+from dataclasses import dataclass
+from enum import Enum
+
+class Platform(Enum):
+    BILIBILI = "bilibili"
+    DOUYIN = "douyin"
+    YOUTUBE = "youtube"
+    KUAISHOU = "kuaishou"
+
+class VideoQuality(Enum):
+    DRAFT = "draft"       # 快速预览
+    STANDARD = "standard" # 标准质量
+    HIGH = "high"         # 高质量(4K)
+
+@dataclass
+class VideoGenerationRequest:
+    script_content: str
+    platform: Platform
+    voice_style: str = "zh-CN-XiaoxiaoNeural"
+    video_style: str = "default"
+    quality: VideoQuality = VideoQuality.STANDARD
+
+class ZetaVideoClient:
+    """ZetaVideo API客户端（占位符实现）"""
+
+    def __init__(self, base_url: str = "http://localhost:8000"):
+        self.base_url = base_url
+        self.api_key = os.getenv("ZETAVIDEO_API_KEY")
+        self.client = httpx.AsyncClient(
+            base_url=base_url,
+            headers={"Authorization": f"Bearer {self.api_key}"}
+        )
+
+    async def generate_video(self, request: VideoGenerationRequest) -> dict:
+        """提交脚本生成视频"""
+        # TODO: 实现真实API调用
+        raise NotImplementedError("ZetaVideo API尚未就绪 - Phase 1 MVP开发中")
+
+    async def get_status(self, job_id: str) -> dict:
+        """查询生成状态"""
+        raise NotImplementedError("ZetaVideo API尚未就绪")
+
+    async def publish(self, video_url: str, platform: Platform, **kwargs) -> dict:
+        """发布到指定平台"""
+        raise NotImplementedError("ZetaVideo API尚未就绪")
+
+    async def batch_generate(
+        self,
+        script_content: str,
+        platforms: List[Platform]
+    ) -> dict:
+        """批量多平台生成"""
+        raise NotImplementedError("ZetaVideo API尚未就绪")
+```
+
+### 工作流集成预览
+
+```mermaid
+graph TD
+    A[技术文章 12000字] --> B[video-script-generator]
+    B --> C1[Bilibili脚本]
+    B --> C2[Douyin脚本]
+    B --> C3[YouTube脚本]
+
+    C1 --> D[ZetaVideo API]
+    C2 --> D
+    C3 --> D
+
+    D --> E1[TTS语音合成]
+    D --> E2[FFmpeg视频拼接]
+    D --> E3[AI封面生成]
+
+    E1 --> F[完整视频]
+    E2 --> F
+    E3 --> F
+
+    F --> G1[抖音发布]
+    F --> G2[B站发布]
+    F --> G3[YouTube发布]
+```
+
+### 环境变量配置
+
+```bash
+# 添加到 ~/.env 或 .env.local
+ZETAVIDEO_API_URL=http://localhost:8000/api/v1
+ZETAVIDEO_API_KEY=your_api_key_here
+ZETAVIDEO_DEFAULT_VOICE=zh-CN-XiaoxiaoNeural
+ZETAVIDEO_DEFAULT_QUALITY=standard
+```
+
+### 技术复用映射
+
+| 源模块 | ZetaVideo服务 | 复用程度 |
+|--------|---------------|----------|
+| pubilie_doc人性化写作 | Content Service | 60% |
+| cover-generator封面 | Asset Service | 70% |
+| platform-publisher | Publish Engine | 50% |
+
+**当前状态**: 脚本生成已完成，API集成待ZetaVideo MVP就绪后激活
