@@ -1,0 +1,278 @@
+{
+  "name": "Topic Recommender (E10)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 6 }]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every 6 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "topic/recommend",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "POST /topic/recommend",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 500],
+      "webhookId": "topic-recommend"
+    },
+    {
+      "parameters": {
+        "url": "https://hacker-news.firebaseio.com/v0/topstories.json",
+        "options": { "timeout": 15000 }
+      },
+      "id": "fetch-hn-ids",
+      "name": "Fetch HN Top Story IDs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const storyIds = $input.first().json;\nconst topIds = storyIds.slice(0, 30);\n\n// Fetch story details\nconst stories = [];\nfor (const id of topIds) {\n  try {\n    const response = await fetch(`https://hacker-news.firebaseio.com/v0/item/${id}.json`);\n    const story = await response.json();\n    if (story && story.type === 'story') {\n      stories.push({\n        id: story.id,\n        title: story.title,\n        url: story.url || `https://news.ycombinator.com/item?id=${story.id}`,\n        score: story.score || 0,\n        comments: story.descendants || 0,\n        source: 'hacker_news'\n      });\n    }\n  } catch (e) {\n    // Skip failed fetches\n  }\n}\n\nreturn stories.map(s => ({ json: s }));"
+      },
+      "id": "fetch-hn-details",
+      "name": "Fetch HN Story Details",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 200]
+    },
+    {
+      "parameters": {
+        "url": "https://www.reddit.com/r/netsec+cybersecurity+hacking/hot.json?limit=30",
+        "options": { "timeout": 15000 },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "User-Agent", "value": "TopicRecommender/1.0" }
+          ]
+        }
+      },
+      "id": "fetch-reddit",
+      "name": "Fetch Reddit Security",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst posts = data?.data?.children || [];\n\nconst formatted = posts\n  .filter(p => p.data && !p.data.stickied)\n  .map(p => ({\n    id: p.data.id,\n    title: p.data.title,\n    url: `https://reddit.com${p.data.permalink}`,\n    score: p.data.ups || 0,\n    comments: p.data.num_comments || 0,\n    subreddit: p.data.subreddit,\n    source: 'reddit'\n  }));\n\nreturn formatted.map(p => ({ json: p }));"
+      },
+      "id": "parse-reddit",
+      "name": "Parse Reddit Posts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 400]
+    },
+    {
+      "parameters": {
+        "url": "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+        "options": { "timeout": 30000 }
+      },
+      "id": "fetch-cisa-kev",
+      "name": "Fetch CISA KEV",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 600]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst vulns = data?.vulnerabilities || [];\n\n// Get recent KEV entries (last 30 days)\nconst thirtyDaysAgo = new Date();\nthirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);\n\nconst recent = vulns\n  .filter(v => new Date(v.dateAdded) >= thirtyDaysAgo)\n  .map(v => ({\n    id: v.cveID,\n    title: `${v.cveID}: ${v.vulnerabilityName}`,\n    url: `https://nvd.nist.gov/vuln/detail/${v.cveID}`,\n    vendor: v.vendorProject,\n    product: v.product,\n    date_added: v.dateAdded,\n    source: 'cisa_kev',\n    priority: 'critical'\n  }))\n  .slice(0, 20);\n\nreturn recent.map(v => ({ json: v }));"
+      },
+      "id": "parse-kev",
+      "name": "Parse KEV Entries",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 600]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "mergeByFields": {
+          "values": []
+        },
+        "options": {}
+      },
+      "id": "merge-sources",
+      "name": "Merge All Sources",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1000, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all().map(i => i.json);\n\n// Security keywords for scoring\nconst securityKeywords = [\n  'security', 'vulnerability', 'cve', 'exploit', 'malware', 'ransomware',\n  'breach', 'hack', 'cyber', 'threat', 'apt', 'zero-day', 'phishing',\n  'attack', 'backdoor', 'encryption', 'authentication'\n];\n\nconst aiKeywords = [\n  'ai', 'llm', 'gpt', 'claude', 'machine learning', 'neural', 'agent',\n  'chatgpt', 'openai', 'anthropic', 'gemini'\n];\n\n// Score and categorize each item\nconst scored = items.map(item => {\n  const titleLower = (item.title || '').toLowerCase();\n  let score = 0;\n  let category = 'general';\n  const tags = [];\n\n  // Base score from engagement\n  if (item.score) score += Math.min(item.score / 100, 30);\n  if (item.comments) score += Math.min(item.comments / 50, 20);\n\n  // Security keyword bonus\n  for (const kw of securityKeywords) {\n    if (titleLower.includes(kw)) {\n      score += 15;\n      category = 'security';\n      tags.push(kw);\n    }\n  }\n\n  // AI keyword bonus\n  for (const kw of aiKeywords) {\n    if (titleLower.includes(kw)) {\n      score += 10;\n      if (category === 'general') category = 'ai';\n      tags.push(kw);\n    }\n  }\n\n  // CISA KEV items get highest priority\n  if (item.source === 'cisa_kev') {\n    score += 50;\n    category = 'security';\n  }\n\n  return {\n    ...item,\n    relevance_score: Math.min(score, 100),\n    category,\n    tags: [...new Set(tags)].slice(0, 5)\n  };\n});\n\n// Sort by score and deduplicate by similar titles\nconst seen = new Set();\nconst unique = scored\n  .sort((a, b) => b.relevance_score - a.relevance_score)\n  .filter(item => {\n    const simplified = item.title.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 50);\n    if (seen.has(simplified)) return false;\n    seen.add(simplified);\n    return true;\n  });\n\n// Generate recommendations\nconst recommendations = unique.slice(0, 15).map((item, idx) => ({\n  rank: idx + 1,\n  topic: item.title,\n  category: item.category,\n  source: item.source,\n  url: item.url,\n  relevance_score: item.relevance_score,\n  tags: item.tags,\n  suggested_angles: item.category === 'security' \n    ? ['威胁分析与防御策略', '技术深度解读', '企业应对指南']\n    : item.category === 'ai'\n    ? ['技术原理解析', '安全影响评估', '实战应用案例']\n    : ['行业趋势分析', '技术解读', '最佳实践'],\n  priority: item.relevance_score >= 70 ? 'high' : item.relevance_score >= 40 ? 'medium' : 'low'\n}));\n\nconst report = {\n  generated_at: new Date().toISOString(),\n  sources_checked: ['hacker_news', 'reddit', 'cisa_kev'],\n  total_items: unique.length,\n  by_category: {\n    security: unique.filter(i => i.category === 'security').length,\n    ai: unique.filter(i => i.category === 'ai').length,\n    general: unique.filter(i => i.category === 'general').length\n  },\n  recommendations\n};\n\nreturn [{ json: report }];"
+      },
+      "id": "analyze-topics",
+      "name": "Analyze & Score Topics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.recommendations.filter(r => r.priority === 'high').length }}",
+              "operation": "larger",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "id": "has-high-priority",
+      "name": "Has High Priority?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1500, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SLACK_WEBHOOK_URL || 'https://hooks.slack.com/services/YOUR/WEBHOOK/URL' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: ':bulb: *New High-Priority Topics Available*', blocks: [{ type: 'section', text: { type: 'mrkdwn', text: '*Top Recommendations:*\\n' + $json.recommendations.filter(r => r.priority === 'high').slice(0, 5).map((r, i) => `${i+1}. [${r.category.toUpperCase()}] ${r.topic.substring(0, 60)}...`).join('\\n') } }, { type: 'context', elements: [{ type: 'mrkdwn', text: `Generated at: ${$json.generated_at} | Total topics: ${$json.total_items}` }] }] }) }}",
+        "options": { "timeout": 10000 }
+      },
+      "id": "notify-slack",
+      "name": "Notify Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1750, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              { "name": "Content-Type", "value": "application/json" }
+            ]
+          }
+        }
+      },
+      "id": "respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1500, 500]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "log-entry",
+              "name": "log_message",
+              "value": "Topic scan completed",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true
+      },
+      "id": "log-result",
+      "name": "Log Result",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1750, 400]
+    }
+  ],
+  "connections": {
+    "Every 6 Hours": {
+      "main": [
+        [
+          { "node": "Fetch HN Top Story IDs", "type": "main", "index": 0 },
+          { "node": "Fetch Reddit Security", "type": "main", "index": 0 },
+          { "node": "Fetch CISA KEV", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "POST /topic/recommend": {
+      "main": [
+        [
+          { "node": "Fetch HN Top Story IDs", "type": "main", "index": 0 },
+          { "node": "Fetch Reddit Security", "type": "main", "index": 0 },
+          { "node": "Fetch CISA KEV", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Fetch HN Top Story IDs": {
+      "main": [
+        [{ "node": "Fetch HN Story Details", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch HN Story Details": {
+      "main": [
+        [{ "node": "Merge All Sources", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Reddit Security": {
+      "main": [
+        [{ "node": "Parse Reddit Posts", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse Reddit Posts": {
+      "main": [
+        [{ "node": "Merge All Sources", "type": "main", "index": 1 }]
+      ]
+    },
+    "Fetch CISA KEV": {
+      "main": [
+        [{ "node": "Parse KEV Entries", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse KEV Entries": {
+      "main": [
+        [{ "node": "Merge All Sources", "type": "main", "index": 2 }]
+      ]
+    },
+    "Merge All Sources": {
+      "main": [
+        [{ "node": "Analyze & Score Topics", "type": "main", "index": 0 }]
+      ]
+    },
+    "Analyze & Score Topics": {
+      "main": [
+        [
+          { "node": "Has High Priority?", "type": "main", "index": 0 },
+          { "node": "Respond to Webhook", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Has High Priority?": {
+      "main": [
+        [{ "node": "Notify Slack", "type": "main", "index": 0 }],
+        [{ "node": "Log Result", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "name": "content-discovery" },
+    { "name": "automation" },
+    { "name": "E10" }
+  ],
+  "triggerCount": 2,
+  "meta": {
+    "instanceId": "pubilie-doc",
+    "templateId": "E10-topic-recommender"
+  }
+}

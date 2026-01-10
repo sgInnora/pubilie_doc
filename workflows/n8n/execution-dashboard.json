@@ -1,0 +1,265 @@
+{
+  "name": "Execution Dashboard API (E8)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "dashboard/metrics",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-metrics",
+      "name": "GET /dashboard/metrics",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 200],
+      "webhookId": "dashboard-metrics"
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "dashboard/workflows",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-workflows",
+      "name": "GET /dashboard/workflows",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 400],
+      "webhookId": "dashboard-workflows"
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "dashboard/failures",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-failures",
+      "name": "GET /dashboard/failures",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 600],
+      "webhookId": "dashboard-failures"
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:5678/api/v1/executions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "limit", "value": "500" }
+          ]
+        },
+        "options": { "timeout": 30000 }
+      },
+      "id": "fetch-all-executions",
+      "name": "Fetch All Executions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "n8n-api-key",
+          "name": "n8n API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:5678/api/v1/workflows",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": { "timeout": 10000 }
+      },
+      "id": "fetch-workflows",
+      "name": "Fetch Workflows",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "n8n-api-key",
+          "name": "n8n API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:5678/api/v1/executions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "limit", "value": "50" },
+            { "name": "status", "value": "error,crashed" }
+          ]
+        },
+        "options": { "timeout": 10000 }
+      },
+      "id": "fetch-failures",
+      "name": "Fetch Recent Failures",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 600],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "n8n-api-key",
+          "name": "n8n API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const executions = $input.first().json.data || [];\nconst now = new Date();\n\n// Time buckets\nconst intervals = {\n  '1h': 60 * 60 * 1000,\n  '6h': 6 * 60 * 60 * 1000,\n  '24h': 24 * 60 * 60 * 1000,\n  '7d': 7 * 24 * 60 * 60 * 1000\n};\n\nconst metrics = {};\n\nfor (const [period, ms] of Object.entries(intervals)) {\n  const cutoff = new Date(now - ms);\n  const periodExecs = executions.filter(e => new Date(e.startedAt) > cutoff);\n  \n  const success = periodExecs.filter(e => e.status === 'success').length;\n  const failed = periodExecs.filter(e => ['error', 'crashed'].includes(e.status)).length;\n  const running = periodExecs.filter(e => e.status === 'running').length;\n  const total = periodExecs.length;\n  \n  // Calculate average duration for successful executions\n  const completedExecs = periodExecs.filter(e => e.status === 'success' && e.stoppedAt);\n  const avgDuration = completedExecs.length > 0 \n    ? completedExecs.reduce((sum, e) => sum + (new Date(e.stoppedAt) - new Date(e.startedAt)), 0) / completedExecs.length / 1000\n    : 0;\n  \n  metrics[period] = {\n    total,\n    success,\n    failed,\n    running,\n    success_rate: total > 0 ? (success / total * 100).toFixed(2) + '%' : 'N/A',\n    avg_duration_seconds: avgDuration.toFixed(2)\n  };\n}\n\n// Per-workflow stats\nconst workflowStats = {};\nexecutions.forEach(e => {\n  const wfName = e.workflowName || 'Unknown';\n  if (!workflowStats[wfName]) {\n    workflowStats[wfName] = { success: 0, failed: 0, total: 0 };\n  }\n  workflowStats[wfName].total++;\n  if (e.status === 'success') workflowStats[wfName].success++;\n  if (['error', 'crashed'].includes(e.status)) workflowStats[wfName].failed++;\n});\n\nconst topWorkflows = Object.entries(workflowStats)\n  .map(([name, stats]) => ({\n    workflow: name,\n    ...stats,\n    success_rate: stats.total > 0 ? (stats.success / stats.total * 100).toFixed(2) + '%' : 'N/A'\n  }))\n  .sort((a, b) => b.total - a.total)\n  .slice(0, 10);\n\nreturn [{\n  json: {\n    generated_at: now.toISOString(),\n    summary: metrics,\n    top_workflows: topWorkflows,\n    total_executions: executions.length\n  }\n}];"
+      },
+      "id": "aggregate-metrics",
+      "name": "Aggregate Metrics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const workflows = $input.first().json.data || [];\n\nconst summary = workflows.map(wf => ({\n  id: wf.id,\n  name: wf.name,\n  active: wf.active,\n  created_at: wf.createdAt,\n  updated_at: wf.updatedAt,\n  tags: wf.tags?.map(t => t.name) || [],\n  nodes_count: wf.nodes?.length || 0\n}));\n\nconst stats = {\n  total: workflows.length,\n  active: workflows.filter(w => w.active).length,\n  inactive: workflows.filter(w => !w.active).length\n};\n\nreturn [{\n  json: {\n    generated_at: new Date().toISOString(),\n    stats,\n    workflows: summary\n  }\n}];"
+      },
+      "id": "format-workflows",
+      "name": "Format Workflow List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const failures = $input.first().json.data || [];\n\nconst formatted = failures.map(f => {\n  let errorMessage = 'Unknown error';\n  try {\n    if (f.data?.resultData?.error?.message) {\n      errorMessage = f.data.resultData.error.message;\n    }\n  } catch (e) {}\n  \n  return {\n    id: f.id,\n    workflow_id: f.workflowId,\n    workflow_name: f.workflowName || 'Unknown',\n    status: f.status,\n    started_at: f.startedAt,\n    stopped_at: f.stoppedAt,\n    error_message: errorMessage,\n    mode: f.mode\n  };\n});\n\n// Group by workflow\nconst byWorkflow = {};\nformatted.forEach(f => {\n  if (!byWorkflow[f.workflow_name]) {\n    byWorkflow[f.workflow_name] = [];\n  }\n  byWorkflow[f.workflow_name].push(f);\n});\n\nconst summary = Object.entries(byWorkflow)\n  .map(([name, failures]) => ({\n    workflow: name,\n    failure_count: failures.length,\n    latest_failure: failures[0]?.started_at,\n    common_errors: [...new Set(failures.map(f => f.error_message))].slice(0, 3)\n  }))\n  .sort((a, b) => b.failure_count - a.failure_count);\n\nreturn [{\n  json: {\n    generated_at: new Date().toISOString(),\n    total_failures: failures.length,\n    by_workflow: summary,\n    recent_failures: formatted.slice(0, 20)\n  }\n}];"
+      },
+      "id": "format-failures",
+      "name": "Format Failure Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 600]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              { "name": "Content-Type", "value": "application/json" },
+              { "name": "X-Dashboard-Version", "value": "1.0" }
+            ]
+          }
+        }
+      },
+      "id": "respond-metrics",
+      "name": "Respond with Metrics",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1000, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              { "name": "Content-Type", "value": "application/json" },
+              { "name": "X-Dashboard-Version", "value": "1.0" }
+            ]
+          }
+        }
+      },
+      "id": "respond-workflows",
+      "name": "Respond with Workflows",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1000, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              { "name": "Content-Type", "value": "application/json" },
+              { "name": "X-Dashboard-Version", "value": "1.0" }
+            ]
+          }
+        }
+      },
+      "id": "respond-failures",
+      "name": "Respond with Failures",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1000, 600]
+    }
+  ],
+  "connections": {
+    "GET /dashboard/metrics": {
+      "main": [
+        [{ "node": "Fetch All Executions", "type": "main", "index": 0 }]
+      ]
+    },
+    "GET /dashboard/workflows": {
+      "main": [
+        [{ "node": "Fetch Workflows", "type": "main", "index": 0 }]
+      ]
+    },
+    "GET /dashboard/failures": {
+      "main": [
+        [{ "node": "Fetch Recent Failures", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch All Executions": {
+      "main": [
+        [{ "node": "Aggregate Metrics", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Workflows": {
+      "main": [
+        [{ "node": "Format Workflow List", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Recent Failures": {
+      "main": [
+        [{ "node": "Format Failure Report", "type": "main", "index": 0 }]
+      ]
+    },
+    "Aggregate Metrics": {
+      "main": [
+        [{ "node": "Respond with Metrics", "type": "main", "index": 0 }]
+      ]
+    },
+    "Format Workflow List": {
+      "main": [
+        [{ "node": "Respond with Workflows", "type": "main", "index": 0 }]
+      ]
+    },
+    "Format Failure Report": {
+      "main": [
+        [{ "node": "Respond with Failures", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "name": "dashboard" },
+    { "name": "api" },
+    { "name": "E8" }
+  ],
+  "triggerCount": 3,
+  "meta": {
+    "instanceId": "pubilie-doc",
+    "templateId": "E8-execution-dashboard"
+  }
+}
