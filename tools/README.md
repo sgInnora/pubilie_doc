@@ -1,9 +1,10 @@
 # pubilie_doc 工具集
 
 > **项目**: AI安全技术文章生成系统 - 自动化工具集
-> **版本**: 2.0.0
+> **版本**: 2.1.0
 > **更新日期**: 2026-01-10
 > **总工具数**: 19个Python模块
+> **AI策略**: CLI优先（Gemini/Codex/Claude → Ollama → API）
 
 ## 📋 工具概览
 
@@ -288,15 +289,55 @@ class CommunityManager:
 
 ---
 
+## 🤖 AI CLI优先策略
+
+工具集优先使用免费的AI CLI而非付费API：
+
+### 优先级顺序
+```
+1️⃣ AI CLI工具（免费、高质量）
+   - Gemini CLI: 技术调研、文本分析
+   - Codex CLI: 代码生成、重构
+   - Claude Code: 架构设计、复杂分析
+
+2️⃣ 本地Ollama（离线可用）
+   - qwen3:14b: 中文处理
+   - gemma3:12b: 英文处理
+
+3️⃣ 付费API（按需使用）
+   - OpenAI API: 批量处理
+   - ZeroGPT API: AI检测
+```
+
+### 任务与推荐CLI
+| 任务 | 首选 | 备选 |
+|------|------|------|
+| 文本转述 | Gemini | Ollama |
+| 知识提取 | Claude | Codex |
+| AI检测分析 | Gemini | ZeroGPT API |
+| 代码生成 | Codex | Claude |
+
+### 快捷命令（~/.zshrc）
+```bash
+ai "prompt"           # 默认使用Gemini
+ai-code "prompt"      # Codex (代码)
+ai-arch "prompt"      # Claude (架构)
+ai-research "topic"   # Gemini (调研)
+ai-fast "prompt"      # Ollama (快速)
+```
+
+---
+
 ## ⚠️ 注意事项
 
 1. **隐私安全**: 所有Python工具仅保留本地，不上传到公开仓库
 2. **API密钥**: 请在`~/.env`配置所需API密钥
 3. **资源需求**: 部分工具（E1, E9）需要GPU或大内存
 4. **网络依赖**: E3, E8, E15需要网络访问
+5. **AI调用**: 优先使用CLI工具，减少API成本
 
 ---
 
 *更新日期: 2026-01-10*
-*版本: 2.0.0*
-*Ultrathink协议实现*
+*版本: 2.1.0*
+*Ultrathink协议实现 + AI CLI优先策略*
