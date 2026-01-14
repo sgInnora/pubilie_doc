@@ -69,8 +69,30 @@ PROJECT_OPTIMIZATION_*.md
 SKILLS_AGENTS_*.md
 *_ARCHIVE*.md
 
-# agents目录
+# 内部目录（全部排除）
 agents/
+content/
+docs/
+tools/
+workflows/
+automation/
+tests/
+
+# 内部文档（根目录）
+ARTICLE_*.md
+ASM_*.md
+AUTHOR_*.md
+CODE_*.md
+CONTENT_*.md
+DEVELOPMENT_*.md
+EXAMPLE_*.md
+HUMANIZED_*.md
+PROJECT_*.md
+ULTRATHINK_*.md
+WRITING_*.md
+*.png
+!2025_*/assets/*.png
+!2026_*/assets/*.png
 
 # ============================================
 # 开发和系统文件
