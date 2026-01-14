@@ -30,18 +30,37 @@
 
 # 项目配置文件（禁止上传）
 CLAUDE.md
+**/CLAUDE.md
 TODOLIST.md
 TODOLIST_*.md
 *.local.json
 settings.local.json
+**/config.py
+**/NEWSLETTER_CLAUDE.md
 
 # 平台特定版本（本地保留，不上传）
 *_LinkedIn.md
+*_Twitter.md
 *_Twitter_Thread.md
 *_Zsxq.md
 *_Medium.md
 *_Newsletter*.md
 *_DevTo.md
+
+# Prompt和SEO元数据文件
+*_Prompt.md
+*_Metadata.md
+**/assets/*_Prompt.md
+**/assets/*_Metadata.md
+
+# 平台特定封面图片
+**/assets/*_LinkedIn.png
+**/assets/*_Medium.png
+**/assets/*_Twitter.png
+
+# 内部任务和增强文件
+*_TASK_LIST.md
+*_enhancement*.md
 
 # 内部文档
 INFLUENCE_*.md
@@ -49,6 +68,9 @@ MULTI_PLATFORM_*.md
 PROJECT_OPTIMIZATION_*.md
 SKILLS_AGENTS_*.md
 *_ARCHIVE*.md
+
+# agents目录
+agents/
 
 # ============================================
 # 开发和系统文件
