@@ -90,6 +90,30 @@ HUMANIZED_*.md
 PROJECT_*.md
 ULTRATHINK_*.md
 WRITING_*.md
+PAPER_*.md
+ARXIV_*.md
+*_MANIFEST.md
+*_VERIFICATION.md
+*_SUMMARY.md
+*_CHECKLIST.md
+
+# 内部设计文档
+*_Self_Iteration_*.md
+*_Operation_Log_*.md
+*_Collaboration_Architecture_*.md
+*_Orchestrator_Design_*.md
+*_Automation_Guide_*.md
+
+# Skill模板包
+skill_templates_pack/
+
+# 国内平台封面（只保留GitHub/通用版本）
+**/assets/*_Douyin.png
+**/assets/*_WeChat*.png
+**/assets/*_Xiaohongshu.png
+**/assets/*_Zhihu.png
+**/assets/*_Test.png
+**/assets/*_Prompt*.md
 *.png
 !2025_*/assets/*.png
 !2026_*/assets/*.png
