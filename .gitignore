@@ -1,6 +1,6 @@
 # ============================================
 # pubilie_doc GitHub公开仓库 .gitignore
-# 更新时间: 2026-01-01
+# 更新时间: 2026-01-14 (安全加固)
 # 原则: 只上传公开技术文章和配图
 # ============================================
 
@@ -96,6 +96,8 @@ ARXIV_*.md
 *_VERIFICATION.md
 *_SUMMARY.md
 *_CHECKLIST.md
+*_REPORT.md
+*_GENERATION_REPORT.md
 
 # 内部设计文档
 *_Self_Iteration_*.md
@@ -107,16 +109,45 @@ ARXIV_*.md
 # Skill模板包
 skill_templates_pack/
 
-# 国内平台封面（只保留GitHub/通用版本）
+# 国内平台封面（全部排除）
 **/assets/*_Douyin.png
 **/assets/*_WeChat*.png
 **/assets/*_Xiaohongshu.png
 **/assets/*_Zhihu.png
 **/assets/*_Test.png
 **/assets/*_Prompt*.md
+
+# ============================================
+# PNG图片规则（精确白名单 - 2026-01-14安全加固）
+# ============================================
+# 默认排除所有PNG
 *.png
-!2025_*/assets/*.png
-!2026_*/assets/*.png
+
+# 只允许以下公开封面格式（精确匹配）
+!2025_*/assets/*_Cover.png
+!2025_*/assets/*_Cover_*.png
+!2025_*/assets/*_GitHub.png
+!2025_*/assets/*_1792x1024.png
+!2026_*/assets/*_Cover.png
+!2026_*/assets/*_Cover_*.png
+!2026_*/assets/*_GitHub.png
+!2026_*/assets/*_1792x1024.png
+
+# 再次强制排除平台特定封面（防止白名单覆盖）
+2025_*/assets/*_LinkedIn.png
+2025_*/assets/*_Medium.png
+2025_*/assets/*_Twitter.png
+2025_*/assets/*_Douyin.png
+2025_*/assets/*_WeChat*.png
+2025_*/assets/*_Xiaohongshu.png
+2025_*/assets/*_Zhihu.png
+2026_*/assets/*_LinkedIn.png
+2026_*/assets/*_Medium.png
+2026_*/assets/*_Twitter.png
+2026_*/assets/*_Douyin.png
+2026_*/assets/*_WeChat*.png
+2026_*/assets/*_Xiaohongshu.png
+2026_*/assets/*_Zhihu.png
 
 # ============================================
 # 开发和系统文件
